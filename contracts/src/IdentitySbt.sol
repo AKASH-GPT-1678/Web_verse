@@ -1,45 +1,85 @@
-// SPDX-Licencese-Identifier: MIT
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract IdentitySBT is ERC721, Ownable, ERC721URIStorage {
-    constructor() ERC721("IdentitySBT", "ISBT") {}
+contract IdentitySBT is ERC721, Ownable {
+    uint256 private _tokenIdCounter;
 
-    uint private _tokenIdCounter;
     struct Identity {
         string username;
         uint256 joinDate;
         uint256 reputation;
+        bool verified;
     }
 
     mapping(uint256 => Identity) public identities;
-    mapping(address => boolean) public hasIdentity;
+    mapping(address => uint256) private _ownerToTokenId;
 
-    function beforetokenTransfer(
-        address from,
-        address to,
-        uint256 tokenId
-    ) internal override {
-        require(
-            _ownerOf(tokenId) == from,
-            "Only the owner can transfer the token"
-        );
-        super.beforetokenTransfer(from, to, tokenId);
-    }
+    event IdentityCreated(address user, uint256 tokenId);
+    event IdentityBurned(address user, uint256 tokenId);
 
-    function safeMint(address to) public onlyOwner {
-            require(!hasIdentity[to], "User already has an SBT");
-        _mint(to, _tokenIdCounter);
+    constructor() ERC721("IdentitySBT", "ISBT") Ownable(msg.sender) {}
 
-    
+    function safeMint(address to, string memory username) public onlyOwner {
+        require(_ownerToTokenId[to] == 0, "User already has an SBT");
+
+        uint256 tokenId = _tokenIdCounter + 1;
+        _safeMint(to, tokenId);
+
+        identities[tokenId] = Identity({
+            username: username,
+            joinDate: block.timestamp,
+            reputation: 0,
+            verified: false
+        });
+
+        _ownerToTokenId[to] = tokenId;
         _tokenIdCounter++;
+
+        emit IdentityCreated(to, tokenId);
     }
 
-    function burn(uint256 tokenId) public {
-        require(msg.sender == ownerOf(tokenId), "BRN01");
+    function burn() public {
+        uint256 tokenId = _ownerToTokenId[msg.sender];
+        require(tokenId != 0, "No SBT found");
+
         _burn(tokenId);
+        delete _ownerToTokenId[msg.sender];
+        delete identities[tokenId];
+
+        emit IdentityBurned(msg.sender, tokenId);
     }
+
+    function makeVerified() public payable {
+        uint256 tokenId = _ownerToTokenId[msg.sender];
+        require(tokenId != 0, "No SBT found");
+        require(msg.value >= 0.01 ether, "Insufficient payment");
+
+        identities[tokenId].verified = true;
+    }
+
+    function checkOwner(address user) public view returns (bool) {
+        uint256 tokenId = _ownerToTokenId[user];
+        return tokenId != 0 && ownerOf(tokenId) == user;
+    }
+
+    function getIdentity(address user) public view returns (Identity memory) {
+        uint256 tokenId = _ownerToTokenId[user];
+        require(tokenId != 0, "No SBT found");
+        return identities[tokenId];
+    }
+
+    // Non-transferable SBT
+//     function _beforeTokenTransfer(
+//         address from,
+//         address to,
+//         uint256 firstTokenId,
+//         uint256 batchSize
+//     ) internal override {
+//         require(from == address(0) || to == address(0), "SBT: Non-transferable");
+//         super._beforeTokenTransfer(from, to, firstTokenId, batchSize);
+//     }
+// }
 }

@@ -107,7 +107,7 @@ contract Subscription {
         _subscriptions[msg.sender].status = Status.INACTIVE;
     }
 
-    function getSubscription() public view returns (Subscriber memory) {
+    function getSubscription() public returns (Subscriber memory) {
         require(_isSubscribed[msg.sender] == true, "Must be Existing User");
         if (_subscriptions[msg.sender].expireDate < block.timestamp) {
             _subscriptions[msg.sender].status = Status.INACTIVE;
